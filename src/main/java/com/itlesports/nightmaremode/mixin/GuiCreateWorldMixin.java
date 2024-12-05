@@ -4,6 +4,7 @@ import btw.world.util.difficulty.Difficulty;
 import net.minecraft.src.GuiButton;
 import net.minecraft.src.GuiCreateWorld;
 import net.minecraft.src.GuiScreen;
+import net.minecraft.src.I18n;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
@@ -42,9 +43,9 @@ public abstract class GuiCreateWorldMixin extends GuiScreen {
     @Redirect(method = "updateButtonText", at = @At(value = "INVOKE", target = "Lbtw/world/util/difficulty/Difficulty;getLocalizedName()Ljava/lang/String;"))
     private String customDifficultyName(Difficulty difficulty){
         if(difficulty.ID == 2){
-            return "Nightmare";
+            return I18n.getString("difficulty.nightmare.name");
         } else if (difficulty.ID == 0){
-            return "Bad Dream";
+            return I18n.getString("difficulty.baddream.name");
         }
         return difficulty.NAME;
     }
@@ -52,22 +53,22 @@ public abstract class GuiCreateWorldMixin extends GuiScreen {
     @Redirect(method = "drawScreen", at = @At(value = "INVOKE", target = "Lnet/minecraft/src/I18n;getString(Ljava/lang/String;)Ljava/lang/String;",ordinal = 10))
     private String customText(String string){
         if (this.difficultyID == 2) {
-            return "The ultimate challenge.";
+            return I18n.getString("difficulty.nightmare.description1");
         }
-        return "A more relaxed experience. Makes";
+        return I18n.getString("difficulty.baddream.description1");
     }
     @Redirect(method = "drawScreen", at = @At(value = "INVOKE", target = "Lnet/minecraft/src/I18n;getString(Ljava/lang/String;)Ljava/lang/String;",ordinal = 11))
     private String customText1(String string){
         if (this.difficultyID == 2) {
-            return "";
+            return I18n.getString("difficulty.nightmare.description2");
         }
-        return "many aspects of Nightmare Mode";
+        return I18n.getString("difficulty.baddream.description2");
     }
     @Redirect(method = "drawScreen", at = @At(value = "INVOKE", target = "Lnet/minecraft/src/I18n;getString(Ljava/lang/String;)Ljava/lang/String;",ordinal = 12))
     private String customText2(String string){
         if (this.difficultyID == 2) {
-            return "";
+            return I18n.getString("difficulty.nightmare.description3");
         }
-        return "easier and more forgiving.";
+        return I18n.getString("difficulty.baddream.description3");
     }
 }
