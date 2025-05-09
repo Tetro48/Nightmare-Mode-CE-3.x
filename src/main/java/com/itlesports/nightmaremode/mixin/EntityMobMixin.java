@@ -2,7 +2,6 @@ package com.itlesports.nightmaremode.mixin;
 
 import btw.block.BTWBlocks;
 import btw.community.nightmaremode.NightmareMode;
-import btw.item.BTWItems;
 import btw.world.util.WorldUtils;
 import com.itlesports.nightmaremode.NightmareUtils;
 import net.minecraft.src.*;
@@ -15,9 +14,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import org.spongepowered.asm.mixin.injection.callback.LocalCapture;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
 
 @Mixin(EntityMob.class)
 public class EntityMobMixin extends EntityCreature{
@@ -25,25 +21,6 @@ public class EntityMobMixin extends EntityCreature{
     public EntityMobMixin(World par1World) {
         super(par1World);
     }
-
-    @Unique private int timeOfLastAttack;
-
-    @Unique
-    private static final List<Integer> itemsToAvoidDropping = new ArrayList<>(Arrays.asList(
-            Item.swordWood.itemID,
-            Item.helmetLeather.itemID,
-            Item.plateLeather.itemID,
-            Item.legsLeather.itemID,
-            Item.bootsLeather.itemID,
-            BTWItems.boneClub.itemID,
-            BTWItems.steelSword.itemID,
-            Item.axeGold.itemID,
-            BTWItems.woolBoots.itemID,
-            BTWItems.woolChest.itemID,
-            BTWItems.woolHelmet.itemID,
-            BTWItems.woolLeggings.itemID,
-            Item.swordDiamond.itemID
-    ));
 
 
     @Inject(method = "isValidLightLevel", at = @At(value = "RETURN", ordinal = 2),cancellable = true, locals = LocalCapture.CAPTURE_FAILHARD)
@@ -58,16 +35,26 @@ public class EntityMobMixin extends EntityCreature{
         return 4;
     }
 
+    @Unique private int timeOfLastAttack;
+
     @Inject(method = "entityMobOnLivingUpdate", at = @At("TAIL"))
     private void manageHealingOverTime(CallbackInfo ci){
-        if(this.worldObj != null && this.ticksExisted % (120 - NightmareUtils.getWorldProgress(this.worldObj) * 10) == 0 && (this.timeOfLastAttack + 100) < this.ticksExisted){
+        boolean shouldIncreaseHealth = false;
+        if (this.worldObj != null && this.worldObj.isRemote) {
+            if(this.ticksExisted % (120 - NightmareUtils.getWorldProgress(this.worldObj) * 10) == 0 && this.timeOfLastAttack + 140 < this.ticksExisted){
+                shouldIncreaseHealth = true;
+            }
+        }
+        if(shouldIncreaseHealth){
             this.heal(1f);
         }
     }
 
     @Inject(method = "entityMobAttackEntityFrom", at = @At("TAIL"))
     private void timeEntityWasRecentlyHit(DamageSource par1DamageSource, float par2, CallbackInfoReturnable<Boolean> cir){
-        this.timeOfLastAttack = this.ticksExisted;
+        if (this.worldObj.isRemote) {
+            this.timeOfLastAttack = this.ticksExisted;
+        }
     }
 
     @Inject(method = "entityMobAttackEntityFrom", at = @At("HEAD"),cancellable = true)

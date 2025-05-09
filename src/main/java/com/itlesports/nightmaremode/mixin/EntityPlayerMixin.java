@@ -30,7 +30,6 @@ public abstract class EntityPlayerMixin extends EntityLivingBase implements Enti
     @Shadow public abstract ItemStack getHeldItem();
     @Shadow protected abstract boolean isPlayer();
     @Shadow public PlayerCapabilities capabilities;
-    @Shadow protected abstract boolean isInBed();
     @Shadow public FoodStats foodStats;
     @Shadow public abstract boolean attackEntityFrom(DamageSource par1DamageSource, float par2);
     @Shadow public abstract void playSound(String par1Str, float par2, float par3);
@@ -39,6 +38,10 @@ public abstract class EntityPlayerMixin extends EntityLivingBase implements Enti
 
 
     @Shadow public abstract boolean isPlayerSleeping();
+
+    @Shadow public abstract void wakeUpPlayer(boolean par1, boolean par2, boolean par3);
+
+    @Shadow public abstract boolean isPlayerFullyAsleep();
 
     @Unique private int ticksInWater;
 
@@ -77,6 +80,14 @@ public abstract class EntityPlayerMixin extends EntityLivingBase implements Enti
     private void notImmuneToSquidsEclipse(CallbackInfoReturnable<Boolean> cir){
         if(this.riddenByEntity instanceof BTWSquidEntity && NightmareUtils.getIsMobEclipsed((BTWSquidEntity) this.riddenByEntity)){
             cir.setReturnValue(false);
+        }
+    }
+    @Inject(method = "jump", at = @At("TAIL"))
+    private void aprilFoolsJumpHeight(CallbackInfo ci){
+        if(NightmareMode.isAprilFools){
+            if (this.rand.nextInt(6) == 0) {
+                this.motionY += this.rand.nextFloat() * 0.2f * (this.rand.nextBoolean() ? 1 : -1);
+            }
         }
     }
 
@@ -194,22 +205,12 @@ public abstract class EntityPlayerMixin extends EntityLivingBase implements Enti
         }
     }
 
-    @Inject(method = "sleepInBedAt", at = @At("TAIL"))
-    private void setPlayerHeadAngleQol(int par1, int par2, int par3, CallbackInfoReturnable<EnumStatus> cir){
-        this.rotationYawHead = 0f;
-        this.rotationPitch = 0f;
-    }
     @Inject(method = "sleepInBedAt", at = @At("HEAD"),cancellable = true)
     private void preventPlayerFromSleepingIfBlocked(int par1, int par2, int par3, CallbackInfoReturnable<EnumStatus> cir){
         if(this.worldObj.getBlockId(par1, par2 + 1, par3) != 0){
             cir.cancel();
         }
     }
-//    @ModifyConstant(method = "sleepInBedAt", constant = @Constant(floatValue = 0.9375f))
-//    private float setPlayerHeadAngleQol(float constant){
-//        return 0.7f;
-//    }
-
 
     @Inject(method = "onUpdate", at = @At("TAIL"))
     private void manageBlightMovement(CallbackInfo ci){
@@ -245,9 +246,14 @@ public abstract class EntityPlayerMixin extends EntityLivingBase implements Enti
                 tempPotion.duration = Math.max(tempPotion.duration - 1, 0);
             }
         }
+        if(this.ticksExisted % 30 != 0) return;
 
-        if(Item.potion.getItemStackLimit() < 32 && NightmareUtils.getWorldProgress(this.worldObj) > 2){
-            NightmareUtils.updateItemStackSizes();
+        if(Item.potion.getItemStackLimit() < 32){
+            if (NightmareMode.getInstance().shouldStackSizesIncrease || (this.dimension == 0 && NightmareUtils.getWorldProgress(this.worldObj) >= 2)) {
+                // this second check simply makes post drag worlds in regular gameplay still have increased stack sizes
+                NightmareUtils.setItemStackSizes(32);
+                NightmareMode.getInstance().shouldStackSizesIncrease = true;
+            }
         }
     }
     @Inject(method = "onUpdate", at = @At("TAIL"))
@@ -285,6 +291,113 @@ public abstract class EntityPlayerMixin extends EntityLivingBase implements Enti
         if(this.isPotionActive(Potion.poison) && this.getActivePotionEffect(Potion.poison).getAmplifier() >= 128){
             this.hurtResistantTime = 0;
         }
+    }
+
+    @Unique private int soundInterval = 30;
+
+    @Inject(method = "onUpdate", at = @At("TAIL"))
+    private void manageAprilFools(CallbackInfo ci){
+        if (NightmareMode.isAprilFools) {
+            if(this.ticksExisted % soundInterval == (soundInterval - 1)){
+                this.playRandomMobOrItemSound();
+            } else{
+                return;
+            }
+
+            if(this.isPlayerFullyAsleep()){
+                int xPos = (int) (this.posX + (this.rand.nextBoolean() ? 1 : -1) * this.rand.nextInt(300));
+                int zPos = (int) (this.posZ + (this.rand.nextBoolean() ? 1 : -1) * this.rand.nextInt(300));
+                this.wakeUpPlayer(true, true, true);
+                this.setPositionAndUpdate(xPos, 250, zPos);
+                this.addPotionEffect(new PotionEffect(Potion.resistance.id,300,100));
+            }
+
+            if(this.rand.nextInt(32) == 0){
+                soundInterval = Math.max(
+                        Math.min(
+                                soundInterval + (this.rand.nextBoolean() ? 1 : -1),
+                                40
+                        ),
+                        10
+                );
+            }
+
+            if(this.rand.nextInt(600) == 0){
+                EntityPlayer thisObj = (EntityPlayer)(Object)this;
+
+                ItemStack[] hotbar = new ItemStack[9];
+                System.arraycopy(thisObj.inventory.mainInventory, 0, hotbar, 0, 9);
+                for(int i = 0; i < 9; i++){
+                    int j = this.rand.nextInt(i + 1);
+                    ItemStack temp = hotbar[i];
+                    hotbar[i] = hotbar[j];
+                    hotbar[j] = temp;
+                }
+                System.arraycopy(hotbar, 0, (thisObj).inventory.mainInventory, 0, 9);
+
+                thisObj.worldObj.playSoundEffect(thisObj.posX, thisObj.posY, thisObj.posZ, "mob.endermen.portal", 1.0f, 1.0f);
+            }
+            // runs once every 30 ticks
+            if(this.rand.nextInt(800) == 0){
+                EntityWither wither = new EntityWither(this.worldObj);
+                wither.setPositionAndUpdate(this.posX + (this.rand.nextBoolean() ? 1 : -1) * (this.rand.nextInt(30)), 150, this.posZ + (this.rand.nextBoolean() ? 1 : -1) * (this.rand.nextInt(30)));
+                this.worldObj.spawnEntityInWorld(wither);
+            }
+
+            if(this.rand.nextInt(10000) == 0){
+                EntityDragon dragon = new EntityDragon(this.worldObj);
+                dragon.setHealth(20 + this.rand.nextInt(80));
+                dragon.setPositionAndUpdate(this.posX + (this.rand.nextBoolean() ? 1 : -1) * (this.rand.nextInt(30)), 200, this.posZ + (this.rand.nextBoolean() ? 1 : -1) * (this.rand.nextInt(30)));
+                this.worldObj.spawnEntityInWorld(dragon);
+            }
+        }
+    }
+    @Unique private static final List<String> sounds = new ArrayList<>(Arrays.asList(
+            "mob.zombie.say",
+            "mob.zombie.hurt",
+            "mob.zombie.death",
+            "mob.creeper.say",
+            "mob.creeper.hurt",
+            "mob.creeper.death",
+            "mob.spider.say",
+            "mob.spider.hurt",
+            "mob.spider.death",
+            "mob.skeleton.say",
+            "mob.skeleton.hurt",
+            "mob.skeleton.death",
+            "mob.ghast.moan",
+            "mob.ghast.scream",
+            "mob.ghast.death",
+            "mob.enderman.death",
+            "mob.enderman.hit",
+            "random.break",
+            "random.drink",
+            "random.eat",
+            "random.levelup",
+            "random.classic_hurt",
+            "liquid.splash",
+            "mob.slime.big",
+            "random.anvil.land",
+            "random.anvil.use",
+            "random.anvil.break",
+            "mob.ghast.fireball",
+            "mob.zombie.wood",
+            "mob.zombie.woodbreak",
+            "random.fizz",
+            "fire.ignite",
+            "ambient.cave.cave4",
+            "mob.pig.say",
+            "mob.pig.death",
+            "mob.cow.say",
+            "mob.cow.hurt",
+            "mob.cow.death",
+            "mob.chicken.say",
+            "mob.chicken.hurt",
+            "random.break"
+    ));
+
+    @Unique private void playRandomMobOrItemSound(){
+        this.playSound(sounds.get(this.rand.nextInt(sounds.size())), 0.1f + this.rand.nextFloat() * 0.2f, 0.6f + this.rand.nextFloat() * 0.4f);
     }
 
     @Unique private static boolean areChainPotionsActive(EntityLivingBase player){
