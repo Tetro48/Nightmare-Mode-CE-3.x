@@ -17,7 +17,7 @@ public abstract class EntityPlayerSPMixin extends EntityPlayer{
     @Inject(method = "<init>", at = @At("TAIL"))
     private void playMusicInTheEnd(Minecraft par1Minecraft, World par2World, Session par3Session, int par4, CallbackInfo ci) {
         if (par2World.provider.dimensionId == 1) {
-            NightmareUtils.forcePlayMusic("nightmare_mode:nmBoss");
+            NightmareUtils.forcePlayMusic("nightmare_mode:nmBoss", true);
         }
         else {
             NightmareUtils.shushMusic();
